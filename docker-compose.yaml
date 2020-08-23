@@ -1,0 +1,141 @@
+version: "2"
+services:
+  namesrv-node1:
+    hostname: namesrv-node1
+    container_name: namesrv-node1
+    image: foxiswho/rocketmq:4.7.0
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPT_EXT: -Xms512M -Xmx512M -Xmn128m
+    volumes:
+      - ./logs/nameserver/node1:/home/rocketmq/logs
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 9876:9876
+    restart: always
+    command: sh mqnamesrv
+  namesrv-node2:
+    hostname: namesrv-node2
+    container_name: namesrv-node2
+    image: foxiswho/rocketmq:4.7.0
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_OPT_EXT: -Xms512M -Xmx512M -Xmn128m
+    volumes:
+      - ./logs/nameserver/node1:/home/rocketmq/logs
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 9877:9876
+    restart: always
+    command: sh mqnamesrv
+  rocketmq-broker-node1-master: 
+    hostname: brokder-node1-master 
+    image: foxiswho/rocketmq:4.7.0
+    volumes:
+      - ./logs/broker/node1/master:/home/rocketmq/logs
+      - ./store/broker/node1/master:/home/rocketmq/store
+      ## 配置文件映射,就是上面写得BrokerNode1 Master配置文件所在路径
+      - ./conf/broker-node1/broker-master.conf:/home/rocketmq/conf/broker.conf
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    environment:
+        TZ: Asia/Shanghai
+        JAVA_OPT_EXT: "-server -Xms256m -Xmx1g -Xmn256m -XX:PermSize=128m -XX:MaxPermSize=320m"
+        NAMESRV_ADDR: namesrv-node1:9876;namesrv-node2:9876
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    ports: 
+      ## listenPort
+      - 10901:10901
+      ## VIP通道默认比listenPort小2
+      - 10899:10899
+      - 10902:10902
+    depends_on: 
+      - namesrv-node1
+      - namesrv-node2
+  rocketmq-broker-node1-slave: 
+    hostname: brokder-node1-slave
+    image: foxiswho/rocketmq:4.7.0
+    restart: always
+    volumes:
+      - ./logs/broker/node1/slave:/home/rocketmq/logs
+      - ./store/broker/node1/slave:/home/rocketmq/store
+      - ./conf/broker-node1/broker-slave.conf:/home/rocketmq/conf/broker.conf
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+        TZ: Asia/Shanghai
+        JAVA_OPT_EXT: "-server -Xms256m -Xmx1g -Xmn256m -XX:PermSize=128m -XX:MaxPermSize=320m"
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    ports: 
+      - 10911:10911
+      - 10909:10909
+      - 10912:10912
+    depends_on: 
+      - namesrv-node1
+      - namesrv-node2
+      - rocketmq-broker-node1-master
+  rocketmq-broker-node2-master: 
+    hostname: brokder-node2-master 
+    image: foxiswho/rocketmq:4.7.0
+    volumes:
+      - ./logs/broker/node2/master:/home/rocketmq/logs
+      - ./store/broker/node2/master:/home/rocketmq/store
+      ## 配置文件映射,就是上面写得BrokerNode2 Master配置文件所在路径
+      - ./conf/broker-node2/broker-master.conf:/home/rocketmq/conf/broker.conf
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    environment:
+        TZ: Asia/Shanghai
+        JAVA_OPT_EXT: "-server -Xms256m -Xmx1g -Xmn256m -XX:PermSize=128m -XX:MaxPermSize=320m"
+        NAMESRV_ADDR: namesrv-node1:9876;namesrv-node2:9876
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    ports: 
+      - 11901:11901
+      - 11899:11899
+      - 11902:11902
+    depends_on: 
+      - namesrv-node1
+      - namesrv-node2
+  rocketmq-broker-node2-slave: 
+    hostname: brokder-node1-slave
+    image: foxiswho/rocketmq:4.7.0
+    restart: always
+    volumes:
+      - ./logs/broker/node2/slave:/home/rocketmq/logs
+      - ./store/broker/node2/slave:/home/rocketmq/store
+      - ./conf/broker-node2/broker-slave.conf:/home/rocketmq/conf/broker.conf
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+        TZ: Asia/Shanghai
+        JAVA_OPT_EXT: "-server -Xms256m -Xmx1g -Xmn256m -XX:PermSize=128m -XX:MaxPermSize=320m"
+    command: sh mqbroker -c /home/rocketmq/conf/broker.conf
+    ports: 
+      - 11911:11911
+      - 11909:11909
+      - 11912:11912
+    depends_on: 
+      - namesrv-node1
+      - namesrv-node2
+      - rocketmq-broker-node1-master
+  rocketmq-console: 
+    build: ./console
+    container_name: rocketmq-console
+    restart: always
+    ports: 
+      - 9001:9001
+    environment:
+      TZ: Asia/Shanghai
+      ROCKETMQ_CONFIG_NAMESRV_ADDR: namesrv-node1:9876;namesrv-node2:9876
+      ## 关闭VIP Channel
+      ROCKETMQ_CONFIG_IS_VIP_CHANNEL: "false"
+      ## 开启密码验证(用户密码配置文件在./console/users.properties中)可热修改,无需停机
+      ROCKETMQ_CONFIG_LOGIN_REQUIRED: "true"
+    volumes: 
+      - ./console/data:/data/rocketmq-console
+      - /etc/localtime:/etc/localtime:ro
+    depends_on: 
+      - namesrv-node1
+      - namesrv-node2
+      - rocketmq-broker-node1-master
+      - rocketmq-broker-node2-master
+      - rocketmq-broker-node1-slave
+      - rocketmq-broker-node2-slave
